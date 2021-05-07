@@ -1,0 +1,14 @@
+# BEGIN ANSIBLE MANAGED CSR BLOCK
+certmgr_crt_csr: |
+  -----BEGIN CERTIFICATE REQUEST----- CSR CONTENT -----END CERTIFICATE REQUEST-----
+# END ANSIBLE MANAGED CSR BLOCK
+# BEGIN ansible managed block
+certmgr_sslId: 1327386
+# END ansible managed block
+# BEGIN ANSIBLE MANAGED BLOCK
+certmgr_signed_cert: |
+  -----BEGIN CERTIFICATE-----
+  Cert Content
+  -----END CERTIFICATE-----
+  
+# END ANSIBLE MANAGED BLOCK

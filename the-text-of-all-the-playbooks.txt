@@ -1,0 +1,1 @@
+ansible-playbook collect.yml --vault-password-file=driver -e common_name=example.domain.edu

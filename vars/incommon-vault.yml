@@ -1,0 +1,4 @@
+# encrypt with ansible-vault!
+vault_certmgr_user:
+vault_certmgr_pass:
+vault_certmgr_ur:

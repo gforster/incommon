@@ -1,0 +1,76 @@
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    certmgr_crt_body:
+    certmgr_base_url: https://cert-manager.com/api
+    certmgr_endpoint: ssl/v1/enroll
+    certmgr_uri_method: POST
+    certmgr_crt_comments: ""
+    certmgr_crt_customFields_name: [ {} ]
+    certmgr_crt_customFields_values: [ {} ]
+    # required for wildcard certs
+    # certmgr_crt_numberServers: 1
+  tasks:
+    - name: common_name is required
+      assert:
+        that:
+          - common_name is defined
+    - name: Get vaulted credentials
+      include_vars: vars/incommon-vault.yml
+      tags: always
+    - name: Set auth variables
+      set_fact:
+        certmgr_user: "{{ vault_certmgr_user }}"
+        certmgr_pass: "{{ vault_certmgr_pass }}"
+        certmgr_uri: "{{ vault_certmgr_uri }}"
+    - name: Set up Headers
+      set_fact:
+        certmgr_headers:
+          login: "{{ certmgr_user }}"
+          password: "{{ certmgr_pass }}"
+          customerUri: "{{ certmgr_uri }}"
+
+    - name: include default vars
+      include_vars:
+        file: defaults/main.yml
+
+    - name: read in vars from {{ common_name }}
+      include_vars:
+        file: vars/{{ common_name }}/vars.yml
+
+    - name: common_name is required
+      assert:
+        that:
+          - certmgr_crt_csr is defined
+
+    - name: setup body for enrolling certificate
+      set_fact:
+        certmgr_crt_body:
+          orgId: "{{ certmgr_crt_orgId }}"
+          csr: "{{ certmgr_crt_csr }}"
+          subjAltNames: "{{ certmgr_crt_san | default(common_name) }}"
+          certType: "{{ certmgr_crt_certType }}"
+          numberServers: "{{ certmgr_crt_numberServers| default(omit) }}"
+          serverType: "{{ certmgr_crt_serverType }}"
+          term: "{{ certmgr_crt_term }}"
+          comments: "{{ certmgr_crt_comments }}"
+          externalRequester: "{{ certmgr_crt_externalRequester }}"
+
+    - name: Run call against api endpoint
+      uri:
+        url: "{{ certmgr_base_url }}/{{ certmgr_endpoint }}"
+        method: "{{ certmgr_uri_method }}"
+        headers: "{{ certmgr_headers }}"
+        body_format: json
+        return_content: true
+        body: "{{ certmgr_crt_body }}"
+      register: api_call
+    - debug: var=api_call
+
+    - name: save sslId to vars/{{ common_name }}
+      blockinfile:
+        marker: "# {mark} ansible managed block - sslId"
+        path: vars/{{ common_name }}/vars.yml
+        block: |
+          certmgr_sslId: {{ api_call.json.sslId }}

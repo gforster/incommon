@@ -1,0 +1,40 @@
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    certmgr_uri_method: GET
+    certmgr_crt_body:
+    certmgr_base_url: https://cert-manager.com/api
+  tasks:
+    - name: Get vaulted credentials
+      include_vars: vars/incommon-vault.yml
+
+    - name: Set auth variables
+      set_fact:
+        certmgr_user: "{{ vault_certmgr_user }}"
+        certmgr_pass: "{{ vault_certmgr_pass }}"
+        certmgr_uri: "{{ vault_certmgr_uri }}"
+
+    - name: Set up Headers
+      set_fact:
+        certmgr_headers:
+          login: "{{ certmgr_user }}"
+          password: "{{ certmgr_pass }}"
+          customerUri: "{{ certmgr_uri }}"
+
+    - name: include vars
+      include_vars:
+        file: defaults/main.yml
+
+    - name: read in vars from vars/{{ common_name }}
+      include_vars:
+        file: vars/{{ common_name }}/vars.yml
+
+    - name: check if vars{{ common_name }}/vars.yml contains a sslId
+      fail:
+        msg: "you must enroll this hostname before you can collect on it"
+      when: certmgr_sslId is undefined
+
+    - name: Run API calls to collect x509,x509CO,x509IO certs
+      include_tasks: tasks/collect-api-call.yml
+      loop: "{{ certmgr_formatType_calls | dict2items }}"

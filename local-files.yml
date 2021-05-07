@@ -1,0 +1,51 @@
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    certmgr_use_fullchain: false
+  tasks:
+    - name: include vars
+      include_vars:
+        file: defaults/main.yml
+
+    - name: ensure required vars are defined
+      fail:
+        msg: "You must specify `common_name` and `certmgr_dest_dir`"
+      when:
+        - certmgr_dest_dir is not defined
+        - common_name is not defined
+
+    - name: read in vars from vars/{{ common_name }}
+      include_vars:
+        dir: vars/{{ common_name }}
+        extensions:
+          - yml
+
+    - name: check if vars{{ common_name }}/vars.yml contains a key
+      fail:
+        msg: "you must create a private key before you can output it (vault_private_key is not defined)"
+      when: vault_private_key is not defined
+
+    - name: check if vars{{ common_name }}/vars.yml contains a certificate
+      fail:
+        msg: "you must enroll this hostname before you can output the certificate (certificate var not found in vars)"
+      when:
+        - certmgr_use_fullchain and certmgr_fullchain_cert is defined
+        - not certmgr_use_fullchain and certmgr_signed_cert is defined
+
+    - name: Set cert variable based on whether to use the full chain
+      set_fact:
+        cert_body: "{{ ( certmgr_use_fullchain ) | ternary(certmgr_fullchain_cert, certmgr_signed_cert) }}"
+
+    - name: Output key and cert to filesystem
+      copy:
+        content: "{{ item.content }}"
+        dest: "{{ certmgr_dest_dir }}/{{ item.file }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - content: "{{ vault_private_key }}"
+          file: "{{ common_name }}.key"
+          mode: "0600"
+        - content: "{{ cert_body }}"
+          file: "{{ common_name }}.crt"
+          mode: "0660"

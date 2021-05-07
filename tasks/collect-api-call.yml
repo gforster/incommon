@@ -1,0 +1,34 @@
+- name: Set certmanager vars
+  set_fact:
+    certmgr_endpoint: ssl/v1/collect/{{ certmgr_sslId }}/{{ item.key }}
+    certmgr_cert_body:
+      sslId: "{{ certmgr_sslId }}"
+      formatType: "{{ item.key }}"
+
+- name: Run call against api endpoint
+  uri:
+    url: "{{ certmgr_base_url }}/{{ certmgr_endpoint }}"
+    method: "{{ certmgr_uri_method }}"
+    headers: "{{ certmgr_headers }}"
+    body_format: json
+    return_content: true
+    body: "{{ certmgr_crt_body }}"
+  register: api_call
+  delay: 15
+  retries: 12
+  until: '"BEGIN" in api_call.content'
+
+- debug:
+    var: api_call
+
+- name: remove newlines from crt to save in yaml format
+  set_fact:
+    signed_cert: "{{ api_call.content|replace('\n','\n\ \ ') }}"
+
+- name: save cert to statefile
+  blockinfile:
+    path: vars/{{ common_name }}/vars.yml
+    marker: "# {mark} {{ item.value }} ANSIBLE MANAGED BLOCK - signed_cert"
+    block: |
+      {{ item.value }}: |
+        {{ signed_cert }}

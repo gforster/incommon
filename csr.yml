@@ -1,0 +1,82 @@
+---
+- name: generate csr
+  hosts: localhost
+  become: no
+  gather_facts: no
+
+  vars:
+    temp_dir: temp
+    # required for SANs
+    # certmgr_crt_san: fqdn1.example.com,fqdn2.example.com
+  tasks:
+  - name: Assert required vars
+    assert:
+      that:
+        - common_name is defined
+
+  - name: include vault
+    include_vars:
+      file: vars/incommon-vault.yml
+
+  - name: include vars
+    include_vars:
+      file: defaults/main.yml
+
+  - name: include {{ common_name }} vars
+    include_vars:
+      dir: vars/{{ common_name }}
+
+  - name: Assert required vars
+    assert:
+      that:
+        - vault_private_key is defined
+
+  - name: create temporary key file
+    copy:
+      content: "{{ vault_private_key }}"
+      dest: "{{ temp_dir }}/{{ common_name }}.key"
+      mode: 0600
+    notify: cleanup temp
+
+  - name: generate csr
+    openssl_csr:
+      path: "{{ temp_dir }}/{{ common_name }}.csr"
+      privatekey_path: "{{ temp_dir }}/{{ common_name }}.key"
+      email_address: "{{ email_address }}"
+      common_name: "{{ common_name }}"
+      subject_alt_name: "{{ certmgr_crt_san.split(',') | map('regex_replace', '^', 'DNS:')|list }}"
+      country_name: "{{ country_name }}"
+      state_or_province_name: "{{ state_or_province_name }}"
+      locality_name: "{{ locality_name }}"
+      organization_name: "{{ organization_name }}"
+      organizational_unit_name: "{{ organizational_unit_name }}"
+    notify: cleanup temp
+
+  - name: read in csr
+    set_fact:
+      new_csr: "{{ lookup('file','temp/' + common_name + '.csr') }}"
+
+  - name: send new csr to var file
+    blockinfile:
+      create: true
+      block: |
+        certmgr_crt_csr: |
+          {{ new_csr | indent(2) }}
+      marker: "# {mark} csr_content"
+      dest: "vars/{{ common_name }}/vars.yml"
+
+  - name: Get text of csr
+    shell: openssl req -in temp/{{ common_name }}.csr -noout -text
+    register: csr_text
+    changed_when: false
+
+  - name:  Show csr output for any needed checks
+    debug:
+      var: csr_text.stdout_lines
+
+  handlers:
+  - name: cleanup temp
+    file:
+      path: "{{ item }}"
+      state: absent
+    loop: "{{ lookup('fileglob', temp_dir + '/' + common_name + '*', wantlist=True) }}"

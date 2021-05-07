@@ -1,0 +1,31 @@
+---
+- name: key to stdout
+  hosts: localhost
+  become: no
+  gather_facts: no
+
+  vars:
+    common_name: ""
+    private_key: ""
+
+  tasks:
+
+  - name: include vault
+    include_vars: file=vars/vault.yml
+  - name: include vars
+    include_vars: file=defaults/main.yml
+
+  - debug: var=vault_common_name
+  - debug: var=common_name
+  - debug: var=vault_common_name.{{common_name}}
+
+  - name: check that private key exists
+    fail:
+      msg: "private key does not exist, cannot generate csr"
+    when: vault_common_name.{{common_name}} is not defined
+
+  - name: assign key from vault
+    set_fact:
+      private_key: "{{ vault_common_name[common_name] }}"
+
+  - debug: var=private_key

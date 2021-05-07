@@ -1,0 +1,24 @@
+serverType_dict:
+  Apache-ModSSL: 2
+certType_dict:
+  InCommonSha2: 224
+  InCommonUnified: 228
+email_address: {} 
+organization_name: {} 
+organizational_unit_name: {}
+state_or_province_name: {} 
+locality_name: {} 
+country_name: US
+key_size: 2048
+key_algorithm: RSA
+certmgr_crt_orgId: 5293
+certmgr_crt_term: 365
+certmgr_crt_certType: "{{ certType_dict['InCommonUnified'] }}"
+certmgr_crt_externalRequester: {} 
+certmgr_crt_serverType: "{{ serverType_dict['Apache-ModSSL'] }}"
+# the type of cert to download
+# https://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=&ved=2ahUKEwidxfDOka_sAhWQaM0KHf2qBuwQFjABegQIBxAC&url=https%3A%2F%2Fspaces.internet2.edu%2Fdownload%2Fattachments%2F124944445%2FInCommon_CM_RESTful-API-TLS.pdf%3Fversion%3D1%26modificationDate%3D1519248195505%26api%3Dv2&usg=AOvVaw0fva03p9-il6IcLFoIQwg9
+certmgr_formatType_calls:
+  x509: certmgr_fullchain_cert
+  x509CO: certmgr_signed_cert
+  x509IOR: certmgr_intermediate_cert

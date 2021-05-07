@@ -1,0 +1,110 @@
+---
+- name: create a private key
+  hosts: localhost
+  become: no
+  gather_facts: no
+  vars:
+    temp_dir: 'temp'
+  tasks:
+  - name: Ensure required vars
+    assert:
+      that:
+        - common_name is defined
+        - sans_list_string is defined # comma-separated string of sans
+
+  - name: Ensure that common_name dir exists
+    file:
+      path: "{{ playbook_dir }}/vars/{{ common_name }}"
+      state: directory
+  
+  - name: Write san to vars file
+    blockinfile:
+      create: true
+      block: |
+        certmgr_crt_san: {{ sans_list_string }}
+      marker: "# {mark} certmgr_crt_san block"
+      dest: "{{ playbook_dir }}/vars/{{ common_name }}/vars.yml"
+      
+  - name: Check if vault file exists
+    stat:
+      path: "{{ playbook_dir }}/vars/{{ common_name }}/vault.yml"
+    register: vault_file
+
+  - name: Create a vault.yml if it does not exist
+    block:
+      - name: Ensure {{ common_name }} dir exists
+        file:
+          path: "{{ playbook_dir }}/vars/{{ common_name }}"
+          state: directory
+      - name: Create empty vault file
+        copy:
+          content: "---"
+          dest: "{{ playbook_dir }}/vars/{{ common_name }}/vault.yml"
+    when: not vault_file.stat.exists|bool
+
+  - name: include vault
+    include_vars:
+      file: vars/{{ common_name }}/vault.yml
+    when: vault_file.stat.exists|bool
+
+  - name: include vars
+    include_vars:
+      file: defaults/main.yml
+
+  - name: check that key doesn't already exist
+    fail:
+      msg: Key already exists! Please manually remove key or set regenerate_private_key to true
+    when: vault_private_key is defined and not regenerate_private_key|default(false)|bool
+
+  - name: ensure temp directory exists
+    file:
+      path: "{{ temp_dir }}"
+      state: directory
+
+  - name: generate key
+    openssl_privatekey:
+      path: "{{ temp_dir }}/{{ common_name }}.key"
+      size: "{{ key_size }}"
+      type: "{{ key_algorithm }}"
+    notify: cleanup temp
+
+  - name: read in key
+    set_fact:
+      new_key: "{{ lookup('file','temp/' + common_name + '.key') }}"
+  - name: debug new key
+    debug:
+      var: new_key
+      verbosity: 3
+
+  - name: Copy vault content
+    copy:
+      src: "vars/{{ common_name }}/vault.yml"
+      dest: "{{ temp_dir }}/{{ common_name }}.vault"
+    notify: cleanup temp
+
+
+  - name: send new key to vault file
+    blockinfile:
+      create: true
+      block: |
+        vault_private_key: |
+          {{ new_key | indent(2) }}
+      marker: "# {mark} vault_private_key block"
+      dest: "{{ temp_dir }}/{{ common_name }}.vault"
+    register: vault_file
+
+  - name: Ensure encrypted vault content
+    shell: ansible-vault encrypt {{ temp_dir }}/{{ common_name }}.vault --vault-password-file=driver # noqa 305 503
+    when: vault_file.changed
+
+  # using shell to ensure the vault content remains encrypted
+  - name: Copy vault file back
+    command: cp "{{ temp_dir }}/{{ common_name }}.vault" "vars/{{ common_name }}/vault.yml" # noqa 305 503
+    when: vault_file.changed
+
+  handlers:
+  - name: cleanup temp
+    file:
+      path: "{{ item }}"
+      state: absent
+    loop: "{{ lookup('fileglob', temp_dir + '/' + common_name + '*', wantlist=True) }}"

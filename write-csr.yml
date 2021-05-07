@@ -1,0 +1,21 @@
+- hosts: all
+  connection: local
+  gather_facts: false
+  vars:
+    certmgr_crt_csr:
+    certmgr_hostname: example.domain.edu 
+  tasks:
+    - name: create hostname vars dir
+      file:
+        path: vars/{{ certmgr_hostname }}
+        state: directory
+    - name: create vars.yml
+      file:
+        path: vars/{{ certmgr_hostname }}/vars.yml
+        state: touch
+    - name: write csr to file
+      blockinfile:
+        marker: "# {mark} ANSIBLE MANAGED CSR BLOCK"
+        path: vars/{{ certmgr_hostname }}/vars.yml
+        block: |
+          certmgr_crt_csr: {{ certmgr_crt_csr }}
